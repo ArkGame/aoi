@@ -65,13 +65,17 @@ static int gettimeofday(struct timeval *tp, void *tzp)
 #define _state_remove(value, state) value &= ~state
 #define _state_is(value, state) (value & state)
 
-#if iimeta
+#ifndef __max
+#define __max(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
+#if (iimeta)
 /* 内存统计 */
 volatile int64_t gcallocsize = 0;
 volatile int64_t gfreesize = 0;
 volatile int64_t gholdsize = 0;
 
-#if iithreadsafe
+#if (iithreadsafe)
 static imutex *_imeta_mutex() {
     static imutex realmutex;
     static imutex *mutex = NULL;
@@ -93,9 +97,9 @@ static imutex *_imeta_mutex() {
 #endif
 
 #undef __ideclaremeta
-#define __ideclaremeta(type, cap) {#type, {NULL, 0, cap}, sizeof(type), -1, 0, 0, NULL, NULL}
+#define __ideclaremeta(type, cap) {#type, {NULL, 0, cap}, sizeof(type), -1, 0, 0, NULL, NULL},
 /* 所有类型的元信息系统 */
-imeta gmetas[] = {__iallmeta,
+imeta gmetas[] = {__iallmeta(__ideclaremeta)
 	__ideclaremeta(imeta, 0)
 };
 
@@ -107,10 +111,6 @@ imeta gmetasuser[IMaxMetaCountForUser] = {{0}};
 
 #ifndef __countof
 #define __countof(array) (sizeof(array)/sizeof(array[0]))
-#endif
-
-#ifndef __max
-#define __max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
 /* 内置的meta个数 */
@@ -129,7 +129,7 @@ imeta *imetaget(int idx) {
         /*take current as the mark for first time*/
         if (meta->current == -1) {
             meta->current = 0;
-#if iithreadsafe
+#if (iithreadsafe)
             imutexinit(&meta->mutex);
 #endif
         }
@@ -149,7 +149,7 @@ int imetaregister(const char* name, int size, int capacity) {
 	gmetasuser[gmetacountuser].cache.capacity = capacity;
     gmetasuser[gmetacountuser].tracecalloc = NULL;
     gmetasuser[gmetacountuser].tracefree = NULL;
-#if iithreadsafe
+#if (iithreadsafe)
     imutexinit(&gmetasuser[gmetacountuser].mutex);
 #endif
 	return gmetacount + gmetacountuser++;
@@ -279,7 +279,7 @@ void iaoicacheclear(imeta *meta) {
 void iaoimemorystate() {
 	int i;
 	ilog("[AOI-Memory] *************************************************************** Begin\n");
-	ilog("[AOI-Memory] Total---> new: %lld, free: %lld, hold: %lld \n", gcallocsize, gfreesize, gholdsize);
+	ilog("[AOI-Memory] Total---> new: %" PRId64 ", free: %" PRId64 ", hold: %" PRId64 " \n", gcallocsize, gfreesize, gholdsize);
    
 	for (i=0; i<gmetacount; ++i) {
         ilog("[AOI-Memory] "__imeta_format"\n", __imeta_value(gmetas[i]));
@@ -340,7 +340,7 @@ void iaoimemorystate() {
 }
 
 /*获取当前的总的内存统计*/
-int64_t iaoimemorysize(imeta *meta, int kind) {
+int64_t iaoimemorysize(void *meta, int kind) {
     return 0;
 }
 
@@ -1271,7 +1271,7 @@ int icirclerelation(const icircle *con, const icircle *c) {
 
 #define __Since(t) (__Micros - t)
 
-#define iplogwhen(t, when, ...) do { if(open_log_profile && t > when) {printf("[PROFILE] Take %lld micros ", t); printf(__VA_ARGS__); } } while (0)
+#define iplogwhen(t, when, ...) do { if(open_log_profile && t > when) {printf("[PROFILE] Take %" PRId64 " micros ", t); printf(__VA_ARGS__); } } while (0)
 
 #define iplog(t, ...) iplogwhen(t, __ProfileThreashold, __VA_ARGS__)
 
@@ -1282,7 +1282,7 @@ int icirclerelation(const icircle *con, const icircle *c) {
 
 /* 增加引用计数 */
 int irefretain(iref *ref) {
-#if iithreadsafe
+#if (iithreadsafe)
     return iatomicincrement(&ref->ref);
 #else
 	return ++ref->ref;
@@ -1293,7 +1293,7 @@ int irefretain(iref *ref) {
 void irefrelease(iref *ref) {
 	
 	/* 没有引用了，析构对象 */
-#if iithreadsafe
+#if (iithreadsafe)
     if (iatomicdecrement(&ref->ref) == 0) {
 #else
     if (--ref->ref == 0) {
@@ -2706,7 +2706,7 @@ void irangeitefree(irangeite *ite) {
 /*iiok: iino*/
 int irangenext(irangeite *ite) {
     icheckret(ite, iino);
-    icheckret(ite->__internal & EnumRangeIteState_Invalid, iino); // invalid ite
+    icheckret(ite->__internal & EnumRangeIteState_Invalid, iino); /* invalid ite */
     
     return ite->access->accessnext(ite);
 }
@@ -2714,7 +2714,7 @@ int irangenext(irangeite *ite) {
 /* returnt the value address */
 const void *irangevalue(irangeite *ite) {
     icheckret(ite, NULL);
-    icheckret(ite->__internal & EnumRangeIteState_Invalid, NULL); // invalid ite
+    icheckret(ite->__internal & EnumRangeIteState_Invalid, NULL); /* invalid ite */
     
     return ite->access->accessvalue(ite);
 }
@@ -5195,7 +5195,7 @@ int justaddunit(imap *map, inode *node, iunit *unit){
     inodeupdatetickfromunit(node, unit);
 
 #if open_log_unit
-	ilog("[IMAP-Unit] Add Unit (%lld, %s) To Node (%d, %s)\n",
+	ilog("[IMAP-Unit] Add Unit (%" PRId64 ", %s) To Node (%d, %s)\n",
 			unit->id, unit->code.code, node->level, node->code.code);
 #endif
 	list_add_front(node->units, unit);
@@ -5217,7 +5217,7 @@ int justremoveunit(imap *map, inode *node, iunit *unit) {
 	--map->state.unitcount;
 
 #if open_log_unit
-	ilog("[IMAP-Unit] Remove Unit (%lld, %s) From Node (%d, %s)\n",
+	ilog("[IMAP-Unit] Remove Unit (%" PRId64 ", %s) From Node (%d, %s)\n",
 			unit->id, unit->code.code, node->level, node->code.code);
 #endif
     
@@ -5243,14 +5243,14 @@ int justremoveunit(imap *map, inode *node, iunit *unit) {
 /* 打印单元加入节点的操作 */
 #define _print_unit_add(node, unit, idx) \
 	do { \
-		ilog("[IMAP-Unit-Add] Unit(%lld, %s, x: %.3f, y: %.3f) To Node (%d, %s, %p) \n", \
+		ilog("[IMAP-Unit-Add] Unit(%" PRId64 ", %s, x: %.3f, y: %.3f) To Node (%d, %s, %p) \n", \
 				unit->id, unit->code.code, unit->code.pos.x, unit->code.pos.y, node->level, node->code.code, node); \
 	}while(0)
 
 /* 打印单元移除出节点的操作 */
 #define _print_unit_remove(node, unit, idx) \
 	do {\
-		ilog("[IMAP-Unit-Remove] Unit(%lld, %s, x: %.3f, y: %.3f) From Node (%d, %s, %p) \n", \
+		ilog("[IMAP-Unit-Remove] Unit(%" PRId64 ", %s, x: %.3f, y: %.3f) From Node (%d, %s, %p) \n", \
 				unit->id, unit->code.code, unit->code.pos.x, unit->code.pos.y, node->level, node->code.code, node);\
 	}while(0)
 
@@ -5366,7 +5366,7 @@ int imapaddunitto(imap *map, inode *node, iunit *unit, int idx) {
 
 	code = unit->code.code[idx];
 #if open_log_code
-	ilog("[IMAP-Code] (%lld, %s, %p) Code %d, Idx: %d, Divide: %d\n", unit->id, unit->code.code, unit, code, idx, map->divide);
+	ilog("[IMAP-Code] (%" PRId64 ", %s, %p) Code %d, Idx: %d, Divide: %d\n", unit->id, unit->code.code, unit, code, idx, map->divide);
 #endif
 
 	/* 节点不需要查找了，或者以及达到最大层级 */
@@ -5739,13 +5739,13 @@ void imapstatedesc(const imap *map, int require,
 	}
 	/* 节点信息 */
 	if (require & EnumMapStateNode) {
-		ilog("%s Node: Count=%lld\n", tag, map->state.nodecount);
-		ilog("%s Node-Leaf: Count=%lld\n", tag, map->state.leafcount);
+		ilog("%s Node: Count=%" PRId64 "\n", tag, map->state.nodecount);
+		ilog("%s Node-Leaf: Count=%" PRId64 "\n", tag, map->state.leafcount);
 		ilog("%s Node-Cache: Count=%lu\n", tag, irefcachesize(map->nodecache));
 	}
 	/* 单元信息 */
 	if (require & EnumMapStateUnit) {
-		ilog("%s Unit: Count=%lld\n", tag, map->state.unitcount);
+		ilog("%s Unit: Count=%" PRId64 "\n", tag, map->state.unitcount);
 	}
 	/* 状态尾 */
 	if (require & EnumMapStateTail || inhead) {
@@ -5841,12 +5841,12 @@ int imapaddunittolevel(imap *map, iunit *unit, int level) {
 
 	/* log it */
 #if open_log_unit
-	ilog("[IMAP-Unit] Add Unit: %lld - (%.3f, %.3f) - %s\n",
+	ilog("[IMAP-Unit] Add Unit: %" PRId64 " - (%.3f, %.3f) - %s\n",
 			unit->id, unit->pos.x, unit->pos.y, unit->code.code);
 #endif
 	micro = __Micros;
 	ok = imapaddunitto(map, map->root, unit, 0);
-	iplog(__Since(micro), "[IMAP-Unit] Add Unit: %lld - (%.3f, %.3f) - %s\n",
+	iplog(__Since(micro), "[IMAP-Unit] Add Unit: %" PRId64 " - (%.3f, %.3f) - %s\n",
 			unit->id, unit->pos.x, unit->pos.y, unit->code.code);
 	return ok;
 }
@@ -5875,13 +5875,13 @@ int imapremoveunit(imap *map, iunit *unit) {
 
 	/* log it */
 #if open_log_unit
-	ilog("[IMAP-Unit] Remove Unit: %lld - (%.3f, %.3f) - %s\n",
+	ilog("[IMAP-Unit] Remove Unit: %" PRId64 " - (%.3f, %.3f) - %s\n",
 			unit->id, unit->pos.x, unit->pos.y, unit->code.code);
 #endif
 	micro = __Micros;
 	ok = imapremoveunitfrom(map, map->root, unit, 0, map->root);
 	iplog(__Since(micro), "[IMAP-Unit] Remove Unit: "
-			"%lld - (%.3f, %.3f) - %s\n",
+			"%" PRId64 " - (%.3f, %.3f) - %s\n",
 			unit->id, unit->pos.x, unit->pos.y, unit->code.code);
 
 	return ok;
@@ -5900,7 +5900,7 @@ int imapremoveunitdirect(imap *map, iunit *unit) {
     
 	/* log it */
 #if open_log_unit
-	ilog("[IMAP-Unit] Remove Unit: %lld - (%.3f, %.3f) - %s\n",
+	ilog("[IMAP-Unit] Remove Unit: %" PRId64 " - (%.3f, %.3f) - %s\n",
 			unit->id, unit->pos.x, unit->pos.y, unit->code.code);
 #endif
 	micro = __Micros;
@@ -5922,7 +5922,7 @@ int imapremoveunitdirect(imap *map, iunit *unit) {
         }
     }
     iplog(__Since(micro), "[IMAP-Unit] Remove Unit: "
-			"%lld - (%.3f, %.3f) - %s\n",
+			"%" PRId64 " - (%.3f, %.3f) - %s\n",
 			unit->id, unit->pos.x, unit->pos.y, unit->code.code);
 
     return iiok;
@@ -6069,7 +6069,7 @@ int imapupdateunit(imap *map, iunit *unit) {
         _imaprefreshutick(impact, utick);
 	}
 #endif
-	iplog(__Since(micro), "[MAP-Unit] Update  Unit(%lld) To (%s, %.3f, %.3f)\n",
+	iplog(__Since(micro), "[MAP-Unit] Update  Unit(%" PRId64 ") To (%s, %.3f, %.3f)\n",
 			unit->id, code.code, code.pos.x, code.pos.y);
 
 	return ok;
@@ -6080,7 +6080,7 @@ void imaprefreshunit(imap *map, const iunit *unit) {
 	iunused(map);
 	iunused(unit);
 
-#if iiradius
+#if (iiradius)
 	if (map->maxradius < unit->radius) {
 		map->maxradius = unit->radius;
 	}
@@ -6298,13 +6298,13 @@ int _ientryfilter_circle(imap *map, const ifilter *filter, const iunit* unit) {
 	icheckret(unit, iino);
 	iunused(map);
 
-#if iiradius
+#if (iiradius)
 	ucircle.pos = unit->pos;
 	ucircle.radius = unit->radius;
 	/* 距离超出范围 */
 	if (icircleintersect(&filter->s.u.circle, &ucircle) == iino) {
 #if open_log_filter
-		ilog("[MAP-Filter] NO : Unit: %lld (%.3f, %.3f : %.3f) - (%.3f, %.3f: %.3f)\n",
+		ilog("[MAP-Filter] NO : Unit: %" PRId64 " (%.3f, %.3f : %.3f) - (%.3f, %.3f: %.3f)\n",
 				unit->id,
 				unit->pos.x, unit->pos.y,
 				unit->radius,
@@ -6316,7 +6316,7 @@ int _ientryfilter_circle(imap *map, const ifilter *filter, const iunit* unit) {
 	/* 距离超出范围 */
 	if (icirclecontainspoint(&filter->s.u.circle, &unit->pos) == iino) {
 #if open_log_filter
-		ilog("[MAP-Filter] NO : Unit: %lld (%.3f, %.3f) - (%.3f, %.3f: %.3f)\n",
+		ilog("[MAP-Filter] NO : Unit: %" PRId64 " (%.3f, %.3f) - (%.3f, %.3f: %.3f)\n",
 				unit->id,
 				unit->pos.x, unit->pos.y,
 				filter->s.u.circle.pos.x, filter->s.u.circle.pos.y, filter->s.u.circle.radis);
@@ -6356,13 +6356,13 @@ static int _ientryfilter_rect(imap *map, const ifilter *filter, const iunit* uni
 	icheckret(unit, iino);
 	iunused(map);
 
-#if iiradius
+#if (iiradius)
 	/* 距离超出范围 */
 	c.pos = unit->pos;
 	c.radius = unit->radius;
 	if (irectintersect(&filter->s.u.rect, &c) == iino) {
 #if open_log_filter
-		ilog("[MAP-Filter] NO : Unit: %lld (%.3f, %.3f: %.3f)"
+		ilog("[MAP-Filter] NO : Unit: %" PRId64 " (%.3f, %.3f: %.3f)"
 				" Not In Rect (%.3f, %.3f:%.3f, %.3f) \n",
 				unit->id,
 				unit->pos.x, unit->pos.y, unit->radius,
@@ -6376,7 +6376,7 @@ static int _ientryfilter_rect(imap *map, const ifilter *filter, const iunit* uni
 	/* 距离超出范围 */
 	if (irectcontainspoint(&filter->s.u.rect, &unit->pos) == iino) {
 #if open_log_filter
-		ilog("[MAP-Filter] NO : Unit: %lld (%.3f, %.3f)"
+		ilog("[MAP-Filter] NO : Unit: %" PRId64 " (%.3f, %.3f)"
 				" Not In Rect (%.3f, %.3f:%.3f, %.3f) \n",
 				unit->id,
 				unit->pos.x, unit->pos.y,
@@ -6425,7 +6425,7 @@ static int _ientryfilter_line(imap *map,  const ifilter *filter, const iunit* un
     ipos closest = iline2dclosestpoint(line, center, epsilon);
     ireal distance;
     
-#if iiradius
+#if (iiradius)
     distanceradius += unit->radius * unit->radius;
 #endif
     distance = idistancepow2(center, &closest);
@@ -6776,7 +6776,7 @@ void imapsearchcollectline(imap *map, const iline2d *line, ireflist *collects) {
     int i;
     int level = map->divide;
     
-#if iiradius
+#if (iiradius)
     radius += map->maxradius;
     /* if the radius grater than zero,
      * we should move back the dir with radius*/
@@ -6804,7 +6804,7 @@ void imapsearchcollectline(imap *map, const iline2d *line, ireflist *collects) {
         r = _irect_make_from(&begin, &end);
         
         /*expand the rect with radius*/
-#if iiradius
+#if (iiradius)
         _irect_expand_radius(&r, map->maxradius);
 #endif
         
@@ -6978,9 +6978,9 @@ void _aoi_printnode(int require, const inode *node, const char* prefix, int tail
 	ilog("[%s]", node->code.code);
 	/* 打印节点时间戳 */
 	if (require & EnumNodePrintStateTick) {
-		ilog(" tick(%lld", node->tick);
+		ilog(" tick(%" PRId64 "", node->tick);
 #if open_node_utick
-		ilog(",%lld", node->utick);
+		ilog(",%" PRId64 "", node->utick);
 #endif
 		ilog(")");
 	}
@@ -6989,7 +6989,7 @@ void _aoi_printnode(int require, const inode *node, const char* prefix, int tail
 		iunit *u = node->units;
 		ilog(" units(");
 		while (u) {
-			ilog("%lld%s", u->id, u->next ? ",":")");
+			ilog("%" PRId64 "%s", u->id, u->next ? ",":")");
 			u= u->next;
 		}
 	}
